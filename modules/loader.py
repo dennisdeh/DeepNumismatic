@@ -7,10 +7,6 @@ from pathlib import Path
 from PIL import Image
 
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(device)
-
-
 def load_images_from_path(root_path: str, valid_exts=(".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff")):
     """
     Recursively loads all images from root_path and its subfolders.
@@ -66,7 +62,30 @@ def load_images_from_folder_train_test(root_path: str, split:float=0.9, valid_ex
     return {"train": ([tp[0][i] for i in train_idx],  [tp[1][i] for i in train_idx]),
             "validation": ([tp[0][i] for i in val_idx],  [tp[1][i] for i in val_idx])}
 
-def pytorch_loader(root_path: str,batch_size:int=1, transformer= None, split:float=0.9, valid_exts=(".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff"), seed:int=42):
+def _pair_dataset(images, labels, transformer=None):
+    """
+    Zips images with labels and applies transformer lazily in __getitem__.
+    Labels here are file paths; they are kept aligned during shuffling by DataLoader.
+    """
+    class ImgPathDataset(torch.utils.data.Dataset):
+        def __init__(self, imgs, ys, tfm):
+            self.imgs = imgs
+            self.ys = ys
+            self.tfm = tfm
+
+        def __len__(self):
+            return len(self.imgs)
+
+        def __getitem__(self, idx):
+            x = self.imgs[idx]
+            if self.tfm is not None:
+                x = self.tfm(x)
+            y = self.ys[idx]
+            return x, y
+
+    return ImgPathDataset(images, labels, transformer)
+
+def pytorch_loader(root_path: str,batch_size:int=1, transformer=None, split:float=0.9, valid_exts=(".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff"), seed:int=42):
     d = load_images_from_folder_train_test(root_path=root_path, split=split, valid_exts=valid_exts, seed=seed)
 
     # Prepare datasets: apply transformer (if provided) to PIL images before batching
@@ -78,13 +97,30 @@ def pytorch_loader(root_path: str,batch_size:int=1, transformer= None, split:flo
         train_imgs = [transformer(img) for img in train_imgs]
         val_imgs = [transformer(img) for img in val_imgs]
 
-    data_train=torch.utils.data.DataLoader(train_imgs, batch_size=batch_size, shuffle=True)
-    data_val = torch.utils.data.DataLoader(val_imgs, batch_size=batch_size, shuffle=True)
+    # get target label from file path
+    y_train = []
+    y_val = []
+    for x in d["train"][1]:
+        y_train.append(x.split("/")[-2])
+    for x in d["validation"][1]:
+        y_val.append(x.split("/")[-2])
 
-    return {"train": (data_train,  d["train"][1]),
-            "validation": (data_val,  d["validation"][1])}
+    # pair data and create a dataset
+    train_dataset = _pair_dataset(train_imgs, y_train, transformer)
+    val_dataset = _pair_dataset(val_imgs, y_val, transformer)
+
+    data_train = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    data_val = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
+
+    return {"train": data_train,
+            "validation": data_val}
 
 
 if __name__ == "__main__2":
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(device)
+
     #out = load_images_from_path("data/RRC-60/Observe")
-    out = pytorch_loader("data/RRC-60/Observe")
+    transformer = torchvision.transforms.Compose([torchvision.transforms.ToTensor(),
+                                                  torchvision.transforms.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5))])
+    out = pytorch_loader(root_path="data/RRC-60/Observe_test",transformer=transformer)
