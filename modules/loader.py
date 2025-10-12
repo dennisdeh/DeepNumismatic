@@ -113,7 +113,8 @@ def pytorch_loader(root_path: str,batch_size:int=1, transformer=None, split:floa
     data_val = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
 
     return {"train": data_train,
-            "validation": data_val}
+            "validation": data_val,
+            "labels": set(y_train + y_val)}
 
 
 if __name__ == "__main__2":
