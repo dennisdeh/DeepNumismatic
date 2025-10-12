@@ -2,8 +2,7 @@ import torch
 import torchvision
 from modules.loader import pytorch_loader
 
-def _to_target(y):
-    return int(y)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Train model
 
@@ -11,19 +10,19 @@ def train_cnn(ds: dict, num_epochs: int = 5, lr: float = 1e-3,  print_every: int
     """
     Train a simple CNN on ds['train'] and validate on ds['validation'].
     ds: dict with keys 'train' and 'validation' mapping to DataLoaders that yield (image, label).
-        - image: torch.Tensor [C,H,W]
-        - label: anything convertible to class index or kept as path; if label is a path string,
-                 classes will be inferred from its parent directory name.
     """
     assert "train" in ds and "validation" in ds and "labels" in ds, "ds must have 'train' and 'validation' loaders and 'labels'"
+
+    # Build stable label mapping: class_name -> index in [0..K-1]
+    class_names = sorted(list(ds["labels"]))
+    label_to_idx = {name: i for i, name in enumerate(class_names)}
+    num_classes = len(class_names)
 
     # Peek one batch to infer input channels/size
     train_loader = ds["train"]
     val_loader = ds["validation"]
-    first_batch = next(iter(train_loader))
-    x0, y0 = first_batch
-    in_channels = x0.shape[1] if x0.ndim == 4 else 3
-    num_classes = len(ds["labels"])
+    x0, y0 = next(iter(train_loader))
+    in_channels = x0.shape[1] if isinstance(x0, torch.Tensor) and x0.ndim == 4 else 3
 
     # Simple CNN
     model = torch.nn.Sequential(
@@ -44,27 +43,46 @@ def train_cnn(ds: dict, num_epochs: int = 5, lr: float = 1e-3,  print_every: int
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
     def prepare_targets(y):
-        if isinstance(y, torch.Tensor) and y.dtype == torch.long:
-            return y.to(device)
+        # y can be: tensor of longs already in 0..K-1, or list/tuple of strings, or scalar string
+        if isinstance(y, torch.Tensor):
+            if y.dtype == torch.long:
+                return y.to(device)
+            # If it's a tensor of strings (unlikely), fall through to generic handling
+            y = y.tolist()
         if isinstance(y, (list, tuple)):
-            return torch.tensor([_to_target(t) for t in y], dtype=torch.long, device=device)
-        # scalar or single element
-        return torch.tensor([_to_target(y)], dtype=torch.long, device=device)
+            mapped = []
+            for t in y:
+                if isinstance(t, str):
+                    mapped.append(label_to_idx[t])
+                elif isinstance(t, (int,)):
+                    # If numeric, remap through class_names if possible, else assume already 0..K-1
+                    mapped.append(int(t))
+                else:
+                    mapped.append(label_to_idx[str(t)])
+            return torch.tensor(mapped, dtype=torch.long, device=device)
+        # scalar
+        if isinstance(y, str):
+            return torch.tensor([label_to_idx[y]], dtype=torch.long, device=device)
+        return torch.tensor([int(y)], dtype=torch.long, device=device)
 
     def run_epoch(loader, train: bool):
-        if train:
-            model.train()
-        else:
-            model.eval()
+        model.train(mode=train)
         total_loss, total_correct, total_samples = 0.0, 0, 0
         with torch.set_grad_enabled(train):
             for step, (images, labels) in enumerate(loader):
-                # images can be list/tuple or tensor depending on transform pipeline
+                # images may be tensor or list of PIL/tensors
                 if isinstance(images, (list, tuple)):
-                    images = torch.stack([img if isinstance(img, torch.Tensor) else torchvision.transforms.functional.to_tensor(img)
-                                          for img in images], dim=0)
-                images = images.to(device)
+                    images = torch.stack([
+                        img if isinstance(img, torch.Tensor)
+                        else torchvision.transforms.functional.to_tensor(img)
+                        for img in images
+                    ], dim=0)
+                images = images.to(device, non_blocking=True)
                 targets = prepare_targets(labels)
+
+                # Ensure shapes align
+                if images.size(0) != targets.size(0):
+                    raise RuntimeError(f"Batch size mismatch: images {images.size(0)} vs targets {targets.size(0)}")
 
                 logits = model(images)
                 loss = criterion(logits, targets)
@@ -95,18 +113,17 @@ def train_cnn(ds: dict, num_epochs: int = 5, lr: float = 1e-3,  print_every: int
               f"val_loss: {val_loss:.4f}, val_acc: {val_acc:.4f}")
 
     return {
-        "model": model
+        "model": model,
+        "classes": class_names,
+        "label_to_idx": label_to_idx,
     }
 
 if __name__ == "__main__2":
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(device)
-
-    # Load images
-    transformer = torchvision.transforms.Compose([torchvision.transforms.Resize(size=(100, 100)),
-                                                  torchvision.transforms.ToTensor(),
-                                                  torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
-    ds = pytorch_loader("data/RRC-60/Observe_test", transformer=transformer)
-
-    # Train model
-    out = train_cnn(ds=ds, num_epochs = 5, lr = 1e-3, print_every = 50)
+    transformer = torchvision.transforms.Compose([
+        torchvision.transforms.Resize(size=(200, 200)),
+        torchvision.transforms.ToTensor(),
+        torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    ])
+    ds = pytorch_loader("data/RRC-60/Observe", transformer=transformer)
+    out = train_cnn(ds=ds, num_epochs=5, lr=1e-3, print_every=50)

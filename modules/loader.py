@@ -88,14 +88,9 @@ def _pair_dataset(images, labels, transformer=None):
 def pytorch_loader(root_path: str,batch_size:int=1, transformer=None, split:float=0.9, valid_exts=(".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff"), seed:int=42):
     d = load_images_from_folder_train_test(root_path=root_path, split=split, valid_exts=valid_exts, seed=seed)
 
-    # Prepare datasets: apply transformer (if provided) to PIL images before batching
+    # Prepare datasets: keep PIL images; transformer will be applied lazily in __getitem__
     train_imgs = d["train"][0]
     val_imgs = d["validation"][0]
-
-    if transformer is not None:
-        # torchvision transforms expect PIL.Image or tensor; our inputs are PIL.Image
-        train_imgs = [transformer(img) for img in train_imgs]
-        val_imgs = [transformer(img) for img in val_imgs]
 
     # get target label from file path
     y_train = []
@@ -105,7 +100,7 @@ def pytorch_loader(root_path: str,batch_size:int=1, transformer=None, split:floa
     for x in d["validation"][1]:
         y_val.append(x.split("/")[-2])
 
-    # pair data and create a dataset
+    # pair data and create a dataset (apply transformer lazily)
     train_dataset = _pair_dataset(train_imgs, y_train, transformer)
     val_dataset = _pair_dataset(val_imgs, y_val, transformer)
 
