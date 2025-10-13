@@ -117,6 +117,9 @@ if __name__ == "__main__2":
     print(device)
 
     #out = load_images_from_path("data/RRC-60/Observe")
-    transformer = torchvision.transforms.Compose([torchvision.transforms.ToTensor(),
-                                                  torchvision.transforms.Normalize((0.5,0.5,0.5), (0.5,0.5,0.5))])
+    transformer = torchvision.transforms.Compose([
+        torchvision.transforms.Resize(size=(500, 500)),
+        torchvision.transforms.ToTensor(),
+        torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    ])
     out = pytorch_loader(root_path="data/RRC-60/Observe_test",transformer=transformer)

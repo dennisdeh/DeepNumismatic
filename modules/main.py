@@ -26,17 +26,17 @@ def train_cnn(ds: dict, num_epochs: int = 5, lr: float = 1e-3,  print_every: int
 
     # Simple CNN
     model = torch.nn.Sequential(
-        torch.nn.Conv2d(in_channels, 16, kernel_size=3, padding=1),
+        torch.nn.Conv2d(in_channels, 128, kernel_size=3, padding=1),
         torch.nn.ReLU(inplace=True),
         torch.nn.MaxPool2d(2),
-        torch.nn.Conv2d(16, 32, kernel_size=3, padding=1),
+        torch.nn.Conv2d(128, 64, kernel_size=3, padding=1),
         torch.nn.ReLU(inplace=True),
         torch.nn.MaxPool2d(2),
-        torch.nn.Conv2d(32, 64, kernel_size=3, padding=1),
+        torch.nn.Conv2d(64, 32, kernel_size=3, padding=1),
         torch.nn.ReLU(inplace=True),
         torch.nn.AdaptiveAvgPool2d((1, 1)),
         torch.nn.Flatten(),
-        torch.nn.Linear(64, num_classes),
+        torch.nn.Linear(32, num_classes),
     ).to(device)
 
     criterion = torch.nn.CrossEntropyLoss()
@@ -118,12 +118,12 @@ def train_cnn(ds: dict, num_epochs: int = 5, lr: float = 1e-3,  print_every: int
         "label_to_idx": label_to_idx,
     }
 
-if __name__ == "__main__2":
+if __name__ == "__main__":
     print(device)
     transformer = torchvision.transforms.Compose([
-        torchvision.transforms.Resize(size=(200, 200)),
+        torchvision.transforms.Resize(size=(500, 500)),
         torchvision.transforms.ToTensor(),
         torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
     ])
     ds = pytorch_loader("data/RRC-60/Observe", transformer=transformer)
-    out = train_cnn(ds=ds, num_epochs=5, lr=1e-3, print_every=50)
+    out = train_cnn(ds=ds, num_epochs=100, lr=1e-3, print_every=50)
