@@ -112,14 +112,101 @@ def pytorch_loader(root_path: str,batch_size:int=1, transformer=None, split:floa
             "labels": set(y_train + y_val)}
 
 
+def visualise_batches(ds: dict, split: str = "train", max_images: int = 16, denormalise: bool = True,
+                      mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)):
+    """
+    Visualise a grid of images from the provided pytorch_loader output.
+
+    Args:
+        ds: dict with keys "train", "validation" (DataLoaders) and "labels".
+        split: "train" or "validation".
+        max_images: maximum number of images to show.
+        denormalize: try to invert common normalisation before displaying.
+        mean, std: tuples used for denormalisation if applicable.
+    """
+    assert split in ("train", "validation"), "split must be 'train' or 'validation'"
+    loader = ds[split]
+
+    try:
+        images, labels = next(iter(loader))
+    except StopIteration:
+        print("Empty DataLoader.")
+        return
+
+    # If images are a list of PIL.Images or tensors, stack them
+    if isinstance(images, (list, tuple)):
+        images = torch.stack([
+            img if isinstance(img, torch.Tensor)
+            else torchvision.transforms.functional.to_tensor(img)
+            for img in images
+        ], dim=0)
+
+    # number of images to plot and labels
+    n = min(max_images, images.size(0))
+    images = images[:n]
+    if isinstance(labels, (list, tuple)):
+        labels = list(labels)[:n]
+    elif isinstance(labels, torch.Tensor):
+        labels = labels[:n].tolist()
+    else:
+        labels = [labels] if n == 1 else [labels for _ in range(n)]
+
+    # Denormalise if requested and looks like the normalised range
+    imgs = images.detach().cpu()
+    if denormalise and imgs.dtype in (torch.float16, torch.float32, torch.float64):
+        # Heuristic: if values are outside [0,1], try inverse norm
+        if imgs.min() < 0.0 or imgs.max() > 1.0:
+            mean_t = torch.tensor(mean).view(1, 3, 1, 1)
+            std_t = torch.tensor(std).view(1, 3, 1, 1)
+            if imgs.size(1) == 3:
+                imgs = imgs * std_t + mean_t
+        imgs = imgs.clamp(0, 1)
+
+    # Build titles as strings
+    titles = []
+    for y in labels:
+        if isinstance(y, (list, tuple)):
+            y = y[0]
+        titles.append(str(y))
+
+    # Determine grid structure and plot grid
+    cols = min(4, n)
+    rows = int(np.ceil(n / cols))
+    plt.figure(figsize=(4 * cols, 4 * rows))
+    for i in range(n):
+        plt.subplot(rows, cols, i + 1)
+        img = imgs[i]
+        if img.ndim == 3 and img.size(0) in (1, 3):
+            if img.size(0) == 1:
+                plt.imshow(img.squeeze(0).numpy(), cmap="gray")
+            else:
+                plt.imshow(np.transpose(img.numpy(), (1, 2, 0)))
+        else:
+            arr = img.numpy()
+            if arr.ndim == 3 and arr.shape[0] > 3:
+                arr = np.transpose(arr[:3], (1, 2, 0))
+            elif arr.ndim == 3 and arr.shape[-1] in (1, 3):
+                pass
+            plt.imshow(arr, cmap="gray" if arr.ndim == 2 or arr.shape[-1] == 1 else None)
+        plt.title(titles[i], fontsize=16)
+        plt.axis("off")
+    plt.tight_layout()
+    plt.show()
+
 if __name__ == "__main__2":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(device)
 
     #out = load_images_from_path("data/RRC-60/Observe")
+    img_size = (200, 200)
+    n_channels = 3
     transformer = torchvision.transforms.Compose([
-        torchvision.transforms.Resize(size=(500, 500)),
+        torchvision.transforms.Resize(size=img_size),
+        torchvision.transforms.CenterCrop(size=img_size),
+        torchvision.transforms.Grayscale(n_channels),
         torchvision.transforms.ToTensor(),
-        torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        torchvision.transforms.Normalize(n_channels*(0.5,), n_channels*(0.5,))
     ])
-    out = pytorch_loader(root_path="data/RRC-60/Observe_test",transformer=transformer)
+    out = pytorch_loader(root_path="data/RRC-60/Observe_test",transformer=transformer,batch_size=16)
+    # Visualise some batches
+    visualise_batches(out, split="train", max_images=16, denormalise=True)

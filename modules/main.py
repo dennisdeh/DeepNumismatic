@@ -6,7 +6,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Train model
 
-def train_cnn(ds: dict, num_epochs: int = 5, lr: float = 1e-3,  print_every: int = 50):
+def train_cnn(ds: dict, num_epochs: int = 5, lr: float = 1e-3,  print_every: int = 100):
     """
     Train a simple CNN on ds['train'] and validate on ds['validation'].
     ds: dict with keys 'train' and 'validation' mapping to DataLoaders that yield (image, label).
@@ -24,6 +24,7 @@ def train_cnn(ds: dict, num_epochs: int = 5, lr: float = 1e-3,  print_every: int
     x0, y0 = next(iter(train_loader))
     in_channels = x0.shape[1] if isinstance(x0, torch.Tensor) and x0.ndim == 4 else 3
 
+    # TODO Make model an input; determine in/out channels
     # Simple CNN
     model = torch.nn.Sequential(
         torch.nn.Conv2d(in_channels, 128, kernel_size=3, padding=1),
@@ -47,7 +48,7 @@ def train_cnn(ds: dict, num_epochs: int = 5, lr: float = 1e-3,  print_every: int
         if isinstance(y, torch.Tensor):
             if y.dtype == torch.long:
                 return y.to(device)
-            # If it's a tensor of strings (unlikely), fall through to generic handling
+            # If it's a tensor of strings, fall through to generic handling
             y = y.tolist()
         if isinstance(y, (list, tuple)):
             mapped = []
@@ -118,12 +119,22 @@ def train_cnn(ds: dict, num_epochs: int = 5, lr: float = 1e-3,  print_every: int
         "label_to_idx": label_to_idx,
     }
 
-if __name__ == "__main__":
+if __name__ == "__main__2":
     print(device)
+    #out = load_images_from_path("data/RRC-60/Observe")
+    img_size = (200, 200)
+    n_channels = 3
     transformer = torchvision.transforms.Compose([
-        torchvision.transforms.Resize(size=(500, 500)),
+        torchvision.transforms.Resize(size=img_size),
+        torchvision.transforms.CenterCrop(size=img_size),
+        torchvision.transforms.Grayscale(n_channels),
         torchvision.transforms.ToTensor(),
-        torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        torchvision.transforms.Normalize(n_channels*(0.5,), n_channels*(0.5,))
     ])
-    ds = pytorch_loader("data/RRC-60/Observe", transformer=transformer)
-    out = train_cnn(ds=ds, num_epochs=100, lr=1e-3, print_every=50)
+    ds = pytorch_loader("data/RRC-60/Observe", transformer=transformer, batch_size=150)
+    out = train_cnn(ds=ds, num_epochs=500, lr=1e-3, print_every=50)
+    model = out["model"]
+    # save model
+    torch.save(out["model"], "model.pth")
+    # load model
+    model_load = torch.load("model.pth",weights_only=False)
