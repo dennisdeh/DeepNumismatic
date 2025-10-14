@@ -48,6 +48,27 @@ def load_images_from_path(root_path: str, valid_exts=(".jpg", ".jpeg", ".png", "
     return images, loaded_paths
 
 def load_images_from_folder_train_test(root_path: str, split:float=0.9, valid_exts=(".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff"), seed:int=42):
+    """
+    Splits a dataset of images and their corresponding labels into training and validation sets
+    based on a specified split ratio. The dataset is loaded from a given folder path with support
+    for only specific image file extensions.
+
+    Args:
+        root_path: Root directory path containing the image dataset.
+        split: Proportion of the dataset to allocate as training data. The rest is used for validation.
+            Must be a float between 0 and 1. Default is 0.9.
+        valid_exts: Tuple of valid image file extensions. Default is (".jpg", ".jpeg", ".png",
+            ".bmp", ".gif", ".tiff").
+        seed: Seed value for the random number generator to ensure reproducible train-validation
+            splits. Default is 42.
+
+    Return:
+        A dictionary with two keys:
+             "train": tuple of two lists where the first list contains the training image files,
+                      and the second list contains their corresponding labels.
+             "validation": tuple of two lists where the first list contains the validation image files,
+                           and the second list contains their corresponding labels.
+    """
     tp = load_images_from_path(root_path, valid_exts)
     assert len(tp[0])==len(tp[1])
     n_images = len(tp[0])
@@ -66,6 +87,11 @@ def _pair_dataset(images, labels, transformer=None):
     """
     Zips images with labels and applies transformer lazily in __getitem__.
     Labels here are file paths; they are kept aligned during shuffling by DataLoader.
+
+    Args:
+        images: images as a list of PIL.Image.Image objects
+        labels: accompanying labels as a list of strings
+        transformer: a torchvision.transforms object
     """
     class ImgPathDataset(torch.utils.data.Dataset):
         def __init__(self, imgs, ys, tfm):
@@ -118,10 +144,10 @@ def visualise_batches(ds: dict, split: str = "train", max_images: int = 16, deno
     Visualise a grid of images from the provided pytorch_loader output.
 
     Args:
-        ds: dict with keys "train", "validation" (DataLoaders) and "labels".
-        split: "train" or "validation".
+        ds: dict with keys "train", "validation" (DataLoaders) and "labels"
+        split: "train" or "validation"
         max_images: maximum number of images to show.
-        denormalize: try to invert common normalisation before displaying.
+        denormalise: try to invert common normalisation before displaying
         mean, std: tuples used for denormalisation if applicable.
     """
     assert split in ("train", "validation"), "split must be 'train' or 'validation'"

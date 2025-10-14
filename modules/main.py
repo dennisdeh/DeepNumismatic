@@ -1,5 +1,7 @@
+from datetime import datetime
 import torch
 import torchvision
+import os
 from modules.loader import pytorch_loader
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -119,11 +121,16 @@ def train_cnn(ds: dict, num_epochs: int = 5, lr: float = 1e-3,  print_every: int
         "label_to_idx": label_to_idx,
     }
 
-if __name__ == "__main__2":
-    print(device)
+if __name__ == "__main__":
+    print(f"Using: {device}")
+    torch.cuda.empty_cache()
+    str_timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    path_out = f"models/{str_timestamp}"
+    if not os.path.exists("models"):
+        os.mkdir("models")
     #out = load_images_from_path("data/RRC-60/Observe")
     img_size = (200, 200)
-    n_channels = 3
+    n_channels = 1
     transformer = torchvision.transforms.Compose([
         torchvision.transforms.Resize(size=img_size),
         torchvision.transforms.CenterCrop(size=img_size),
@@ -134,7 +141,12 @@ if __name__ == "__main__2":
     ds = pytorch_loader("data/RRC-60/Observe", transformer=transformer, batch_size=150)
     out = train_cnn(ds=ds, num_epochs=500, lr=1e-3, print_every=50)
     model = out["model"]
-    # save model
-    torch.save(out["model"], "model.pth")
+    # save model and transformer
+    if not os.path.exists(path_out):
+        os.mkdir(path_out)
+    torch.save(out["model"], f"{path_out}/model.pth")
+    torch.save(transformer, f"{path_out}/transformer.pth")
+    print(f"Model saved to {path_out}")
     # load model
-    model_load = torch.load("model.pth",weights_only=False)
+    # model = torch.load("model.pth",weights_only=False)
+    # transformer = torch.load("transformer.pth", weights_only=False)
