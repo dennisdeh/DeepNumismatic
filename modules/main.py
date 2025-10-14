@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Union
+import pandas as pd
 from PIL import Image
 import torch
 import torchvision
@@ -122,9 +123,16 @@ def train_cnn(ds: dict, num_epochs: int = 5, lr: float = 1e-3, print_every: int 
         acc = total_correct / max(1, total_samples)
         return avg_loss, acc
 
+    d_training = {}
     for epoch in range(1, num_epochs + 1):
         train_loss, train_acc = run_epoch(train_loader, train=True)
         val_loss, val_acc = run_epoch(val_loader, train=False)
+        d_training[epoch] = {
+            "train_loss": train_loss,
+            "train_acc": train_acc,
+            "val_loss": val_loss,
+            "val_acc": val_acc,
+        }
         print(
             f"Epoch {epoch}/{num_epochs} - "
             f"train_loss: {train_loss:.4f}, train_acc: {train_acc:.4f} | "
@@ -135,6 +143,7 @@ def train_cnn(ds: dict, num_epochs: int = 5, lr: float = 1e-3, print_every: int 
         "model": model,
         "classes": class_names,
         "label_to_idx": label_to_idx,
+        "training info": d_training,
     }
 
 
@@ -219,8 +228,9 @@ if __name__ == "__main__":
             torchvision.transforms.Normalize(n_channels * (0.5,), n_channels * (0.5,)),
         ]
     )
-    ds = pytorch_loader("data/RRC-60/Observe", transformer=transformer, batch_size=300)
-    out = train_cnn(ds=ds, num_epochs=1500, lr=1e-3, print_every=50)
+    ds = pytorch_loader("data/RRC-60/Observe", transformer=transformer, batch_size=200)
+    torch.cuda.empty_cache()
+    out = train_cnn(ds=ds, num_epochs=2, lr=1e-3, print_every=50)
     model = out["model"]
     label_to_idx = out["label_to_idx"]
 
@@ -230,6 +240,7 @@ if __name__ == "__main__":
     torch.save(out["model"], f"{path_out}/model.pth")
     torch.save(transformer, f"{path_out}/transformer.pth")
     torch.save(out["label_to_idx"], f"{path_out}/labels_mapping.pth")
+    pd.DataFrame(out["training info"]).to_excel(f"{path_out}/training_info.xlsx")
     print(f"Model and parameters saved to {path_out}")
 
     # load model
@@ -239,5 +250,10 @@ if __name__ == "__main__":
     # label_to_idx = torch.load(f"{path_load}/labels_mapping.pth", weights_only=False)
 
     # inference, load example image
-    img = Image.open("data/RRC-60/Observe/1/10.png").convert("RGB")
-    inference(model, img, transformer, label_to_idx=label_to_idx, proba=False)
+    path_file = "data/RRC-60/Observe/1/10.png"
+    img = Image.open(path_file).convert("RGB")
+    out_pred = inference(
+        model, img, transformer, label_to_idx=label_to_idx, proba=False
+    )
+    print(f"Prediction for {img}: {out_pred}")
+    print("Done")
