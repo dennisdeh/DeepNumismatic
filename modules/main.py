@@ -208,8 +208,8 @@ if __name__ == "__main__":
     if not os.path.exists("models"):
         os.mkdir("models")
     # out = load_images_from_path("data/RRC-60/Observe")
-    img_size = (200, 200)
-    n_channels = 1
+    img_size = (250, 250)
+    n_channels = 3
     transformer = torchvision.transforms.Compose(
         [
             torchvision.transforms.Resize(size=img_size),
@@ -219,8 +219,8 @@ if __name__ == "__main__":
             torchvision.transforms.Normalize(n_channels * (0.5,), n_channels * (0.5,)),
         ]
     )
-    ds = pytorch_loader("data/RRC-60/Observe", transformer=transformer, batch_size=150)
-    out = train_cnn(ds=ds, num_epochs=500, lr=1e-3, print_every=50)
+    ds = pytorch_loader("data/RRC-60/Observe", transformer=transformer, batch_size=300)
+    out = train_cnn(ds=ds, num_epochs=1500, lr=1e-3, print_every=50)
     model = out["model"]
     label_to_idx = out["label_to_idx"]
 
