@@ -1,4 +1,6 @@
 from datetime import datetime
+from typing import Union
+from PIL import Image
 import torch
 import torchvision
 import os
@@ -121,6 +123,36 @@ def train_cnn(ds: dict, num_epochs: int = 5, lr: float = 1e-3,  print_every: int
         "label_to_idx": label_to_idx,
     }
 
+def inference(model, img, transformer=None, device: Union[str,None] = None):
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    elif isinstance(device, str):
+        device = torch.device(device)
+    else:
+        raise ValueError(f"Invalid device: {device}")
+
+    # Apply transformer if provided; otherwise make sure we have a tensor
+    if transformer is not None:
+        img = transformer(img)
+    else:
+        if not isinstance(img, torch.Tensor):
+            from torchvision.transforms.functional import to_tensor
+            img = to_tensor(img)
+
+    # Ensure (B,C,H,W)
+    if img.ndim == 3:
+        img = img.unsqueeze(0)
+    elif img.ndim != 4:
+        raise ValueError(f"Expected 3D or 4D tensor/image, got shape {tuple(getattr(img, 'shape', []))}")
+
+    model.eval()
+    with torch.no_grad():
+        model = model.to(device)
+        img = img.to(device=device, dtype=torch.float32)
+        logits = model(img)
+        preds = logits.argmax(dim=1)
+        return preds.item()
+
 if __name__ == "__main__":
     print(f"Using: {device}")
     torch.cuda.empty_cache()
@@ -148,5 +180,9 @@ if __name__ == "__main__":
     torch.save(transformer, f"{path_out}/transformer.pth")
     print(f"Model saved to {path_out}")
     # load model
-    # model = torch.load("model.pth",weights_only=False)
-    # transformer = torch.load("transformer.pth", weights_only=False)
+    model = torch.load("models/2025-10-14_11-19-11/model.pth",weights_only=False)
+    transformer = torch.load("models/2025-10-14_11-19-11/transformer.pth", weights_only=False)
+
+    # inference, load example image
+    img = Image.open("data/RRC-60/Observe/10/2.png").convert("RGB")
+    inference(model, img, transformer, device="cuda")
