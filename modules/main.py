@@ -8,14 +8,18 @@ from modules.loader import pytorch_loader
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+
 # Train model
 
-def train_cnn(ds: dict, num_epochs: int = 5, lr: float = 1e-3,  print_every: int = 100):
+
+def train_cnn(ds: dict, num_epochs: int = 5, lr: float = 1e-3, print_every: int = 100):
     """
     Train a simple CNN on ds['train'] and validate on ds['validation'].
     ds: dict with keys 'train' and 'validation' mapping to DataLoaders that yield (image, label).
     """
-    assert "train" in ds and "validation" in ds and "labels" in ds, "ds must have 'train' and 'validation' loaders and 'labels'"
+    assert (
+        "train" in ds and "validation" in ds and "labels" in ds
+    ), "ds must have 'train' and 'validation' loaders and 'labels'"
 
     # Build stable label mapping: class_name -> index in [0..K-1]
     class_names = sorted(list(ds["labels"]))
@@ -77,17 +81,25 @@ def train_cnn(ds: dict, num_epochs: int = 5, lr: float = 1e-3,  print_every: int
             for step, (images, labels) in enumerate(loader):
                 # images may be tensor or list of PIL/tensors
                 if isinstance(images, (list, tuple)):
-                    images = torch.stack([
-                        img if isinstance(img, torch.Tensor)
-                        else torchvision.transforms.functional.to_tensor(img)
-                        for img in images
-                    ], dim=0)
+                    images = torch.stack(
+                        [
+                            (
+                                img
+                                if isinstance(img, torch.Tensor)
+                                else torchvision.transforms.functional.to_tensor(img)
+                            )
+                            for img in images
+                        ],
+                        dim=0,
+                    )
                 images = images.to(device, non_blocking=True)
                 targets = prepare_targets(labels)
 
                 # Ensure shapes align
                 if images.size(0) != targets.size(0):
-                    raise RuntimeError(f"Batch size mismatch: images {images.size(0)} vs targets {targets.size(0)}")
+                    raise RuntimeError(
+                        f"Batch size mismatch: images {images.size(0)} vs targets {targets.size(0)}"
+                    )
 
                 logits = model(images)
                 loss = criterion(logits, targets)
@@ -104,7 +116,7 @@ def train_cnn(ds: dict, num_epochs: int = 5, lr: float = 1e-3,  print_every: int
                 total_samples += batch_size
 
                 if train and print_every and (step + 1) % print_every == 0:
-                    print(f"Train step {step+1}: loss={loss.item():.4f}")
+                    print(f"Train step {step + 1}: loss={loss.item():.4f}")
 
         avg_loss = total_loss / max(1, total_samples)
         acc = total_correct / max(1, total_samples)
@@ -113,9 +125,11 @@ def train_cnn(ds: dict, num_epochs: int = 5, lr: float = 1e-3,  print_every: int
     for epoch in range(1, num_epochs + 1):
         train_loss, train_acc = run_epoch(train_loader, train=True)
         val_loss, val_acc = run_epoch(val_loader, train=False)
-        print(f"Epoch {epoch}/{num_epochs} - "
-              f"train_loss: {train_loss:.4f}, train_acc: {train_acc:.4f} | "
-              f"val_loss: {val_loss:.4f}, val_acc: {val_acc:.4f}")
+        print(
+            f"Epoch {epoch}/{num_epochs} - "
+            f"train_loss: {train_loss:.4f}, train_acc: {train_acc:.4f} | "
+            f"val_loss: {val_loss:.4f}, val_acc: {val_acc:.4f}"
+        )
 
     return {
         "model": model,
@@ -123,7 +137,16 @@ def train_cnn(ds: dict, num_epochs: int = 5, lr: float = 1e-3,  print_every: int
         "label_to_idx": label_to_idx,
     }
 
-def inference(model, img, transformer=None, device: Union[str,None] = None):
+
+def inference(
+    model,
+    img,
+    transformer=None,
+    device: Union[str, None] = None,
+    label_to_idx: Union[dict, None] = None,
+    proba: bool = False,
+):
+    # Determine device
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
     elif isinstance(device, str):
@@ -136,22 +159,46 @@ def inference(model, img, transformer=None, device: Union[str,None] = None):
         img = transformer(img)
     else:
         if not isinstance(img, torch.Tensor):
-            from torchvision.transforms.functional import to_tensor
-            img = to_tensor(img)
+            img = torchvision.transforms.functional.to_tensor(img)
 
-    # Ensure (B,C,H,W)
+    if label_to_idx is not None:
+        assert isinstance(label_to_idx, dict), "label_to_idx must be a dict"
+        idx_to_label = {v: k for k, v in label_to_idx.items()}
+    else:
+        idx_to_label = None
+
+    # Ensure image channels and dimensions (B,C,H,W) are correct
     if img.ndim == 3:
         img = img.unsqueeze(0)
     elif img.ndim != 4:
-        raise ValueError(f"Expected 3D or 4D tensor/image, got shape {tuple(getattr(img, 'shape', []))}")
+        raise ValueError(
+            f"Expected 3D or 4D tensor/image, got shape {tuple(getattr(img, 'shape', []))}"
+        )
 
     model.eval()
     with torch.no_grad():
         model = model.to(device)
         img = img.to(device=device, dtype=torch.float32)
         logits = model(img)
-        preds = logits.argmax(dim=1)
-        return preds.item()
+        if proba:
+            preds = logits.softmax(dim=1)
+            assert preds.size(dim=0) == 1
+            if idx_to_label is not None:
+                d_out = {
+                    idx_to_label[i]: preds.tolist()[0][i] for i in range(len(preds[0]))
+                }
+                ls_keys_sorted = sorted(d_out.keys())
+                d_out_sorted = {k: d_out[k] for k in ls_keys_sorted}
+                return d_out_sorted
+            else:
+                return preds.tolist()[0]
+        else:
+            preds = logits.argmax(dim=1)
+            if idx_to_label is not None:
+                return idx_to_label[preds.item()]
+            else:
+                return preds.item()
+
 
 if __name__ == "__main__":
     print(f"Using: {device}")
@@ -160,16 +207,18 @@ if __name__ == "__main__":
     path_out = f"models/{str_timestamp}"
     if not os.path.exists("models"):
         os.mkdir("models")
-    #out = load_images_from_path("data/RRC-60/Observe")
+    # out = load_images_from_path("data/RRC-60/Observe")
     img_size = (200, 200)
     n_channels = 1
-    transformer = torchvision.transforms.Compose([
-        torchvision.transforms.Resize(size=img_size),
-        torchvision.transforms.CenterCrop(size=img_size),
-        torchvision.transforms.Grayscale(n_channels),
-        torchvision.transforms.ToTensor(),
-        torchvision.transforms.Normalize(n_channels*(0.5,), n_channels*(0.5,))
-    ])
+    transformer = torchvision.transforms.Compose(
+        [
+            torchvision.transforms.Resize(size=img_size),
+            torchvision.transforms.CenterCrop(size=img_size),
+            torchvision.transforms.Grayscale(n_channels),
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(n_channels * (0.5,), n_channels * (0.5,)),
+        ]
+    )
     ds = pytorch_loader("data/RRC-60/Observe", transformer=transformer, batch_size=150)
     out = train_cnn(ds=ds, num_epochs=500, lr=1e-3, print_every=50)
     model = out["model"]
@@ -180,9 +229,11 @@ if __name__ == "__main__":
     torch.save(transformer, f"{path_out}/transformer.pth")
     print(f"Model saved to {path_out}")
     # load model
-    model = torch.load("models/2025-10-14_11-19-11/model.pth",weights_only=False)
-    transformer = torch.load("models/2025-10-14_11-19-11/transformer.pth", weights_only=False)
+    model = torch.load("models/2025-10-14_11-19-11/model.pth", weights_only=False)
+    transformer = torch.load(
+        "models/2025-10-14_11-19-11/transformer.pth", weights_only=False
+    )
 
     # inference, load example image
-    img = Image.open("data/RRC-60/Observe/10/2.png").convert("RGB")
-    inference(model, img, transformer, device="cuda")
+    img = Image.open("data/RRC-60/Observe/11/3.png").convert("RGB")
+    inference(model, img, transformer, label_to_idx=out["label_to_idx"], proba=False)
