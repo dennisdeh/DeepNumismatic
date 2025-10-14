@@ -222,18 +222,22 @@ if __name__ == "__main__":
     ds = pytorch_loader("data/RRC-60/Observe", transformer=transformer, batch_size=150)
     out = train_cnn(ds=ds, num_epochs=500, lr=1e-3, print_every=50)
     model = out["model"]
+    label_to_idx = out["label_to_idx"]
+
     # save model and transformer
     if not os.path.exists(path_out):
         os.mkdir(path_out)
     torch.save(out["model"], f"{path_out}/model.pth")
     torch.save(transformer, f"{path_out}/transformer.pth")
-    print(f"Model saved to {path_out}")
+    torch.save(out["label_to_idx"], f"{path_out}/labels_mapping.pth")
+    print(f"Model and parameters saved to {path_out}")
+
     # load model
-    model = torch.load("models/2025-10-14_11-19-11/model.pth", weights_only=False)
-    transformer = torch.load(
-        "models/2025-10-14_11-19-11/transformer.pth", weights_only=False
-    )
+    # path_load = "models/2025-10-14_11-19-11"
+    # model = torch.load(f"{path_load}/model.pth", weights_only=False)
+    # transformer = torch.load(f"{path_load}/transformer.pth", weights_only=False)
+    # label_to_idx = torch.load(f"{path_load}/labels_mapping.pth", weights_only=False)
 
     # inference, load example image
-    img = Image.open("data/RRC-60/Observe/11/3.png").convert("RGB")
-    inference(model, img, transformer, label_to_idx=out["label_to_idx"], proba=False)
+    img = Image.open("data/RRC-60/Observe/1/10.png").convert("RGB")
+    inference(model, img, transformer, label_to_idx=label_to_idx, proba=False)
