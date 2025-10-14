@@ -52,6 +52,9 @@ def train_cnn(ds: dict, num_epochs: int = 5, lr: float = 1e-3, print_every: int 
     criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
+    # autocast + grad scaler for mixed precision
+    scaler = torch.amp.GradScaler(device=device.type, enabled=(device.type == "cuda"))
+
     def prepare_targets(y):
         # y can be: tensor of longs already in 0..K-1, or list/tuple of strings, or scalar string
         if isinstance(y, torch.Tensor):
@@ -102,13 +105,24 @@ def train_cnn(ds: dict, num_epochs: int = 5, lr: float = 1e-3, print_every: int 
                         f"Batch size mismatch: images {images.size(0)} vs targets {targets.size(0)}"
                     )
 
-                logits = model(images)
-                loss = criterion(logits, targets)
+                # forward (mixed precision)
+                if train and device.type == "cuda":
+                    with torch.amp.autocast(device_type=device.type):
+                        logits = model(images)
+                        loss = criterion(logits, targets)
+                else:
+                    logits = model(images)
+                    loss = criterion(logits, targets)
 
                 if train:
-                    optimizer.zero_grad()
-                    loss.backward()
-                    optimizer.step()
+                    optimizer.zero_grad(set_to_none=True)
+                    if device.type == "cuda":
+                        scaler.scale(loss).backward()
+                        scaler.step(optimizer)
+                        scaler.update()
+                    else:
+                        loss.backward()
+                        optimizer.step()
 
                 preds = logits.argmax(dim=1)
                 batch_size = images.size(0)
@@ -118,6 +132,11 @@ def train_cnn(ds: dict, num_epochs: int = 5, lr: float = 1e-3, print_every: int 
 
                 if train and print_every and (step + 1) % print_every == 0:
                     print(f"Train step {step + 1}: loss={loss.item():.4f}")
+
+                # free per-iteration temps sooner
+                del images, targets, logits, loss
+                if device.type == "cuda":
+                    torch.cuda.empty_cache()
 
         avg_loss = total_loss / max(1, total_samples)
         acc = total_correct / max(1, total_samples)
@@ -228,7 +247,9 @@ if __name__ == "__main__":
             torchvision.transforms.Normalize(n_channels * (0.5,), n_channels * (0.5,)),
         ]
     )
-    ds = pytorch_loader("data/RRC-60/Observe", transformer=transformer, batch_size=200)
+    ds = pytorch_loader(
+        "data/RRC-60/Observe_test", transformer=transformer, batch_size=400
+    )
     torch.cuda.empty_cache()
     out = train_cnn(ds=ds, num_epochs=2, lr=1e-3, print_every=50)
     model = out["model"]
@@ -240,7 +261,7 @@ if __name__ == "__main__":
     torch.save(out["model"], f"{path_out}/model.pth")
     torch.save(transformer, f"{path_out}/transformer.pth")
     torch.save(out["label_to_idx"], f"{path_out}/labels_mapping.pth")
-    pd.DataFrame(out["training info"]).to_excel(f"{path_out}/training_info.xlsx")
+    pd.DataFrame(out["training info"]).T.to_excel(f"{path_out}/training_info.xlsx")
     print(f"Model and parameters saved to {path_out}")
 
     # load model
@@ -255,5 +276,5 @@ if __name__ == "__main__":
     out_pred = inference(
         model, img, transformer, label_to_idx=label_to_idx, proba=False
     )
-    print(f"Prediction for {img}: {out_pred}")
+    print(f"Prediction for {path_file}: {out_pred}")
     print("Done")
