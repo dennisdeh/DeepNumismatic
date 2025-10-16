@@ -1,3 +1,4 @@
+import time
 from datetime import datetime
 from typing import Union
 import pandas as pd
@@ -144,6 +145,7 @@ def train_cnn(ds: dict, num_epochs: int = 5, lr: float = 1e-3, print_every: int 
 
     d_training = {}
     for epoch in range(1, num_epochs + 1):
+        time_start = time.perf_counter()
         train_loss, train_acc = run_epoch(train_loader, train=True)
         val_loss, val_acc = run_epoch(val_loader, train=False)
         d_training[epoch] = {
@@ -155,7 +157,8 @@ def train_cnn(ds: dict, num_epochs: int = 5, lr: float = 1e-3, print_every: int 
         print(
             f"Epoch {epoch}/{num_epochs} - "
             f"train_loss: {train_loss:.4f}, train_acc: {train_acc:.4f} | "
-            f"val_loss: {val_loss:.4f}, val_acc: {val_acc:.4f}"
+            f"val_loss: {val_loss:.4f}, val_acc: {val_acc:.4f} | "
+            f"time: {(time.perf_counter() - time_start):.2f}s"
         )
 
     return {
@@ -236,7 +239,7 @@ if __name__ == "__main__":
     if not os.path.exists("models"):
         os.mkdir("models")
     # out = load_images_from_path("data/RRC-60/Observe")
-    img_size = (250, 250)
+    img_size = (150, 150)
     n_channels = 3
     transformer = torchvision.transforms.Compose(
         [
@@ -247,11 +250,9 @@ if __name__ == "__main__":
             torchvision.transforms.Normalize(n_channels * (0.5,), n_channels * (0.5,)),
         ]
     )
-    ds = pytorch_loader(
-        "data/RRC-60/Observe_test", transformer=transformer, batch_size=400
-    )
+    ds = pytorch_loader("data/RRC-60/Observe", transformer=transformer, batch_size=700)
     torch.cuda.empty_cache()
-    out = train_cnn(ds=ds, num_epochs=2, lr=1e-3, print_every=50)
+    out = train_cnn(ds=ds, num_epochs=1000, lr=1e-3, print_every=50)
     model = out["model"]
     label_to_idx = out["label_to_idx"]
 
