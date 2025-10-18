@@ -182,8 +182,10 @@ def inference(
         device = "cuda" if torch.cuda.is_available() else "cpu"
     elif isinstance(device, str):
         device = torch.device(device)
+    elif isinstance(device, torch.device):
+        pass  # Already a torch.device object
     else:
-        raise ValueError(f"Invalid device: {device}")
+        raise ValueError(f"Invalid device type: {type(device)}. Expected str, torch.device, or None")
 
     # Apply transformer if provided; otherwise make sure we have a tensor
     if transformer is not None:
