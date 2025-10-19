@@ -11,20 +11,22 @@ from modules.main import train_cnn, inference, device
 from modules.loader import pytorch_loader
 
 # Initialize session state
-if 'model' not in st.session_state:
+if "model" not in st.session_state:
     st.session_state.model = None
-if 'transformer' not in st.session_state:
+if "transformer" not in st.session_state:
     st.session_state.transformer = None
-if 'label_to_idx' not in st.session_state:
+if "label_to_idx" not in st.session_state:
     st.session_state.label_to_idx = None
-if 'model_loaded' not in st.session_state:
+if "model_loaded" not in st.session_state:
     st.session_state.model_loaded = False
-if 'current_device' not in st.session_state:
+if "current_device" not in st.session_state:
     st.session_state.current_device = None
 
 st.title("DeepNumismatic - Numismatic Inference and training app")
-st.markdown("This is a numismatic inference and training app using PyTorch and Streamlit"
-            "for ancient Roman coins")
+st.markdown(
+    "This is a numismatic inference and training app using PyTorch and Streamlit "
+    "for ancient Roman coins"
+)
 
 # Create tabs for different functionalities
 tab1, tab2, tab3 = st.tabs(["🗂️ Load Model", "🖥️ Train CNN", "📷 Inference"])
@@ -43,7 +45,7 @@ with tab1:
         "Select device for model loading:",
         options=available_devices,
         index=available_devices.index("cuda") if "cuda" in available_devices else 0,
-        help="Choose CPU or CUDA. If model was saved on CUDA but you're loading on CPU, select 'cpu'."
+        help="Choose CPU or CUDA. If model was saved on CUDA but you're loading on CPU, select 'cpu'.",
     )
 
     st.divider()
@@ -55,8 +57,7 @@ with tab1:
 
         if model_folders:
             selected_folder = st.selectbox(
-                "Select a model folder:",
-                options=sorted(model_folders, reverse=True)
+                "Select a model folder:", options=sorted(model_folders, reverse=True)
             )
 
             if st.button("Load Model", type="primary"):
@@ -71,17 +72,17 @@ with tab1:
                         st.session_state.model = torch.load(
                             model_path / "model.pth",
                             map_location=map_location,
-                            weights_only=False
+                            weights_only=False,
                         )
                         st.session_state.transformer = torch.load(
                             model_path / "transformer.pth",
                             map_location=map_location,
-                            weights_only=False
+                            weights_only=False,
                         )
                         st.session_state.label_to_idx = torch.load(
                             model_path / "labels_mapping.pth",
                             map_location=map_location,
-                            weights_only=False
+                            weights_only=False,
                         )
 
                         # Move model to selected device
@@ -89,8 +90,12 @@ with tab1:
                         st.session_state.model_loaded = True
                         st.session_state.current_device = selected_device
 
-                    st.success(f"✅ Model loaded successfully from `{selected_folder}` to `{selected_device}`!")
-                    st.info(f"**Classes:** {list(st.session_state.label_to_idx.keys())}")
+                    st.success(
+                        f"✅ Model loaded successfully from `{selected_folder}` to `{selected_device}`!"
+                    )
+                    st.info(
+                        f"**Classes:** {list(st.session_state.label_to_idx.keys())}"
+                    )
                     st.info(f"**Device:** {selected_device}")
 
                 except Exception as e:
@@ -109,7 +114,8 @@ with tab1:
     st.divider()
     if st.session_state.model_loaded:
         st.success(
-            f"✅ A model is currently loaded on `{st.session_state.get('current_device', 'unknown')}` and ready for inference.")
+            f"✅ A model is currently loaded on `{st.session_state.get('current_device', 'unknown')}` and ready for inference."
+        )
     else:
         st.info("ℹ️ No model is currently loaded.")
 
@@ -119,9 +125,7 @@ with tab2:
 
     st.subheader("Data Configuration")
     data_path = st.text_input(
-        "Data Path:",
-        value="data/RRC-60/Observe",
-        help="Path to the dataset directory"
+        "Data Path:", value="data/RRC-60/Observe", help="Path to the dataset directory"
     )
 
     col1, col2 = st.columns(2)
@@ -131,7 +135,9 @@ with tab2:
         n_channels = st.selectbox("Number of Channels:", options=[1, 3], index=1)
 
     with col2:
-        split_ratio = st.slider("Train/Val Split:", min_value=0.5, max_value=0.95, value=0.8, step=0.05)
+        split_ratio = st.slider(
+            "Train/Val Split:", min_value=0.5, max_value=0.95, value=0.8, step=0.05
+        )
         img_height = st.number_input("Image Height:", min_value=16, value=150, step=1)
 
     st.subheader("Training Parameters")
@@ -139,9 +145,13 @@ with tab2:
     with col3:
         num_epochs = st.number_input("Number of Epochs:", min_value=1, value=10, step=1)
     with col4:
-        learning_rate = st.number_input("Learning Rate:", min_value=0.0, value=0.001, step=0.0001, format="%.4f")
+        learning_rate = st.number_input(
+            "Learning Rate:", min_value=0.0, value=0.001, step=0.0001, format="%.4f"
+        )
     with col5:
-        print_every = st.number_input("Print Every N Steps:", min_value=1, value=50, step=1)
+        print_every = st.number_input(
+            "Print Every N Steps:", min_value=1, value=50, step=1
+        )
 
     st.divider()
 
@@ -150,13 +160,17 @@ with tab2:
             with st.spinner("Preparing dataset and training model..."):
                 # Create transformer
                 img_size = (img_height, img_width)
-                transformer = torchvision.transforms.Compose([
-                    torchvision.transforms.Resize(size=img_size),
-                    torchvision.transforms.CenterCrop(size=img_size),
-                    torchvision.transforms.Grayscale(n_channels),
-                    torchvision.transforms.ToTensor(),
-                    torchvision.transforms.Normalize(n_channels * (0.5,), n_channels * (0.5,)),
-                ])
+                transformer = torchvision.transforms.Compose(
+                    [
+                        torchvision.transforms.Resize(size=img_size),
+                        torchvision.transforms.CenterCrop(size=img_size),
+                        torchvision.transforms.Grayscale(n_channels),
+                        torchvision.transforms.ToTensor(),
+                        torchvision.transforms.Normalize(
+                            n_channels * (0.5,), n_channels * (0.5,)
+                        ),
+                    ]
+                )
 
                 # Load dataset
                 st.info(f"Loading dataset from `{data_path}`...")
@@ -164,7 +178,7 @@ with tab2:
                     data_path,
                     transformer=transformer,
                     batch_size=batch_size,
-                    split=split_ratio
+                    split=split_ratio,
                 )
 
                 # Train model
@@ -181,7 +195,7 @@ with tab2:
                         ds=ds,
                         num_epochs=num_epochs,
                         lr=learning_rate,
-                        print_every=print_every
+                        print_every=print_every,
                     )
 
                 # Display training output
@@ -200,7 +214,9 @@ with tab2:
 
                 import pandas as pd
 
-                pd.DataFrame(result["training info"]).T.to_excel(path_out / "training_info.xlsx")
+                pd.DataFrame(result["training info"]).T.to_excel(
+                    path_out / "training_info.xlsx"
+                )
 
                 st.success(f"✅ Training completed! Model saved to `{path_out}`")
 
@@ -230,8 +246,7 @@ with tab3:
 
         # Image upload
         uploaded_file = st.file_uploader(
-            "Upload an image for inference:",
-            type=["png", "jpg", "jpeg", "bmp"]
+            "Upload an image for inference:", type=["png", "jpg", "jpeg", "bmp"]
         )
 
         # Probability option
@@ -265,7 +280,11 @@ with tab3:
                     display_tensor = torch.clamp(display_tensor, 0, 1)
                     transform_to_pil = torchvision.transforms.ToPILImage()
                     transformed_img = transform_to_pil(display_tensor)
-                    st.image(transformed_img, caption="Transformed Image", use_container_width=True)
+                    st.image(
+                        transformed_img,
+                        caption="Transformed Image",
+                        use_container_width=True,
+                    )
 
             st.divider()
 
@@ -279,7 +298,7 @@ with tab3:
                             transformer=st.session_state.transformer,
                             device=device,
                             label_to_idx=st.session_state.label_to_idx,
-                            proba=proba_mode
+                            proba=proba_mode,
                         )
 
                     st.subheader("Prediction Results")
@@ -292,25 +311,27 @@ with tab3:
                         import pandas as pd
 
                         df = pd.DataFrame(
-                            list(prediction.items()),
-                            columns=["Class", "Probability"]
+                            list(prediction.items()), columns=["Class", "Probability"]
                         )
-                        df["Probability"] = df["Probability"].apply(lambda x: f"{x:.4f}")
+                        df["Probability"] = df["Probability"].apply(
+                            lambda x: f"{x:.4f}"
+                        )
                         st.dataframe(df, use_container_width=True, hide_index=True)
 
                         # Show bar chart
                         import pandas as pd
 
                         chart_df = pd.DataFrame(
-                            list(prediction.items()),
-                            columns=["Class", "Probability"]
+                            list(prediction.items()), columns=["Class", "Probability"]
                         )
                         chart_df = chart_df.sort_values("Probability", ascending=False)
                         st.bar_chart(chart_df.set_index("Class"))
 
                         # Highlight the top prediction
                         top_class = max(prediction.items(), key=lambda x: x[1])
-                        st.success(f"**Top Prediction: `{top_class[0]}` with probability `{top_class[1]:.4f}`**")
+                        st.success(
+                            f"**Top Prediction: `{top_class[0]}` with probability `{top_class[1]:.4f}`**"
+                        )
                     else:
                         # Display single prediction
                         st.success(f"**Predicted Class:** `{prediction}`")
