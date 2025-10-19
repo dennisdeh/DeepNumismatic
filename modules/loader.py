@@ -7,7 +7,9 @@ from pathlib import Path
 from PIL import Image
 
 
-def load_images_from_path(root_path: str, valid_exts=(".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff")):
+def load_images_from_path(
+    root_path: str, valid_exts=(".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff")
+):
     """
     Recursively loads all images from root_path and its subfolders.
 
@@ -47,7 +49,13 @@ def load_images_from_path(root_path: str, valid_exts=(".jpg", ".jpeg", ".png", "
 
     return images, loaded_paths
 
-def load_images_from_folder_train_test(root_path: str, split:float=0.9, valid_exts=(".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff"), seed:int=42):
+
+def load_images_from_folder_train_test(
+    root_path: str,
+    split: float = 0.9,
+    valid_exts=(".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff"),
+    seed: int = 42,
+):
     """
     Splits a dataset of images and their corresponding labels into training and validation sets
     based on a specified split ratio. The dataset is loaded from a given folder path with support
@@ -70,18 +78,21 @@ def load_images_from_folder_train_test(root_path: str, split:float=0.9, valid_ex
                            and the second list contains their corresponding labels.
     """
     tp = load_images_from_path(root_path, valid_exts)
-    assert len(tp[0])==len(tp[1])
+    assert len(tp[0]) == len(tp[1])
     n_images = len(tp[0])
 
     # create validation/train split
     np.random.seed(seed)
     idx = np.random.permutation(n_images)
-    n_train = int(split*n_images)
+    n_train = int(split * n_images)
     train_idx = idx[:n_train].tolist()
     val_idx = idx[n_train:].tolist()
 
-    return {"train": ([tp[0][i] for i in train_idx],  [tp[1][i] for i in train_idx]),
-            "validation": ([tp[0][i] for i in val_idx],  [tp[1][i] for i in val_idx])}
+    return {
+        "train": ([tp[0][i] for i in train_idx], [tp[1][i] for i in train_idx]),
+        "validation": ([tp[0][i] for i in val_idx], [tp[1][i] for i in val_idx]),
+    }
+
 
 def _pair_dataset(images, labels, transformer=None):
     """
@@ -93,6 +104,7 @@ def _pair_dataset(images, labels, transformer=None):
         labels: accompanying labels as a list of strings
         transformer: a torchvision.transforms object
     """
+
     class ImgPathDataset(torch.utils.data.Dataset):
         def __init__(self, imgs, ys, tfm):
             self.imgs = imgs
@@ -111,8 +123,18 @@ def _pair_dataset(images, labels, transformer=None):
 
     return ImgPathDataset(images, labels, transformer)
 
-def pytorch_loader(root_path: str,batch_size:int=1, transformer=None, split:float=0.9, valid_exts=(".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff"), seed:int=42):
-    d = load_images_from_folder_train_test(root_path=root_path, split=split, valid_exts=valid_exts, seed=seed)
+
+def pytorch_loader(
+    root_path: str,
+    batch_size: int = 1,
+    transformer=None,
+    split: float = 0.9,
+    valid_exts=(".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff"),
+    seed: int = 42,
+):
+    d = load_images_from_folder_train_test(
+        root_path=root_path, split=split, valid_exts=valid_exts, seed=seed
+    )
 
     # Prepare datasets: keep PIL images; transformer will be applied lazily in __getitem__
     train_imgs = d["train"][0]
@@ -130,16 +152,24 @@ def pytorch_loader(root_path: str,batch_size:int=1, transformer=None, split:floa
     train_dataset = _pair_dataset(train_imgs, y_train, transformer)
     val_dataset = _pair_dataset(val_imgs, y_val, transformer)
 
-    data_train = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    data_val = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
+    data_train = torch.utils.data.DataLoader(
+        train_dataset, batch_size=batch_size, shuffle=True
+    )
+    data_val = torch.utils.data.DataLoader(
+        val_dataset, batch_size=batch_size, shuffle=True
+    )
 
-    return {"train": data_train,
-            "validation": data_val,
-            "labels": set(y_train + y_val)}
+    return {"train": data_train, "validation": data_val, "labels": set(y_train + y_val)}
 
 
-def visualise_batches(ds: dict, split: str = "train", max_images: int = 16, denormalise: bool = True,
-                      mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)):
+def visualise_batches(
+    ds: dict,
+    split: str = "train",
+    max_images: int = 16,
+    denormalise: bool = True,
+    mean=(0.5, 0.5, 0.5),
+    std=(0.5, 0.5, 0.5),
+):
     """
     Visualise a grid of images from the provided pytorch_loader output.
 
@@ -161,11 +191,17 @@ def visualise_batches(ds: dict, split: str = "train", max_images: int = 16, deno
 
     # If images are a list of PIL.Images or tensors, stack them
     if isinstance(images, (list, tuple)):
-        images = torch.stack([
-            img if isinstance(img, torch.Tensor)
-            else torchvision.transforms.functional.to_tensor(img)
-            for img in images
-        ], dim=0)
+        images = torch.stack(
+            [
+                (
+                    img
+                    if isinstance(img, torch.Tensor)
+                    else torchvision.transforms.functional.to_tensor(img)
+                )
+                for img in images
+            ],
+            dim=0,
+        )
 
     # number of images to plot and labels
     n = min(max_images, images.size(0))
@@ -213,26 +249,33 @@ def visualise_batches(ds: dict, split: str = "train", max_images: int = 16, deno
                 arr = np.transpose(arr[:3], (1, 2, 0))
             elif arr.ndim == 3 and arr.shape[-1] in (1, 3):
                 pass
-            plt.imshow(arr, cmap="gray" if arr.ndim == 2 or arr.shape[-1] == 1 else None)
+            plt.imshow(
+                arr, cmap="gray" if arr.ndim == 2 or arr.shape[-1] == 1 else None
+            )
         plt.title(titles[i], fontsize=16)
         plt.axis("off")
     plt.tight_layout()
     plt.show()
 
+
 if __name__ == "__main__2":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(device)
 
-    #out = load_images_from_path("data/RRC-60/Observe")
+    # out = load_images_from_path("data/RRC-60/Observe")
     img_size = (200, 200)
     n_channels = 3
-    transformer = torchvision.transforms.Compose([
-        torchvision.transforms.Resize(size=img_size),
-        torchvision.transforms.CenterCrop(size=img_size),
-        torchvision.transforms.Grayscale(n_channels),
-        torchvision.transforms.ToTensor(),
-        torchvision.transforms.Normalize(n_channels*(0.5,), n_channels*(0.5,))
-    ])
-    out = pytorch_loader(root_path="data/RRC-60/Observe_test",transformer=transformer,batch_size=16)
+    transformer = torchvision.transforms.Compose(
+        [
+            torchvision.transforms.Resize(size=img_size),
+            torchvision.transforms.CenterCrop(size=img_size),
+            # torchvision.transforms.Grayscale(n_channels),
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(n_channels * (0.5,), n_channels * (0.5,)),
+        ]
+    )
+    out = pytorch_loader(
+        root_path="data/RRC-60/Observe_test", transformer=transformer, batch_size=16
+    )
     # Visualise some batches
     visualise_batches(out, split="train", max_images=16, denormalise=True)
