@@ -3,7 +3,7 @@
 This is a simple program to pre-process images, train a CNN, and run inference on given images to classify them into one of the classes of the dataset loaded.
 A useful Streamlit front-end to interact with the PyTorch application is also prepared.
 
-<img alt="Coins and labels" height="200" src="data/demo/check.png" width="200"/>
+<img alt="Coins and labels" height="600" src="data/demo/check.png" width="600"/>
 
 ## Prerequisites
 - Python 3.12+
